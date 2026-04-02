@@ -15,6 +15,8 @@ FAMILY = [
     {'id': 'dharani',      'name': 'Dharani',       'emoji': '👩🏻', 'pin': '1224'},
     {'id': 'dharmaraj',    'name': 'Dharmaraj',     'emoji': '👨🏻', 'pin': '4476'},
     {'id': 'dhanalakshmi', 'name': 'Dhanalakshmi',  'emoji': '👩🏻', 'pin': '2510'},
+    {'id': 'marimuthu',    'name': 'Marimuthu',     'emoji': '👴🏻', 'pin': '1786'},
+    {'id': 'valarmathi',   'name': 'Valarmathi',    'emoji': '👵🏻', 'pin': '1234'},
 ]
 
 # ── DATABASE ──────────────────────────────────────────────────────────────────
