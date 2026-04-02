@@ -1,10 +1,10 @@
 from flask import Flask, render_template, request, jsonify, session
-import os, psycopg2, psycopg2.extras
+import os, pg8000.native
 from datetime import datetime
 
 app = Flask(__name__)
 
-# Secret key — MUST be set as environment variable on Render, no unsafe fallback
+# Secret key — MUST be set as environment variable on Render
 secret = os.environ.get('SECRET_KEY')
 if not secret:
     raise RuntimeError("SECRET_KEY environment variable is not set!")
@@ -20,36 +20,81 @@ FAMILY = [
 # ── DATABASE ──────────────────────────────────────────────────────────────────
 
 def get_db():
-    """Open a new PostgreSQL connection using the DATABASE_URL env variable."""
     db_url = os.environ.get('DATABASE_URL')
     if not db_url:
         raise RuntimeError("DATABASE_URL environment variable is not set!")
-    # Render gives URLs starting with postgres://, psycopg2 needs postgresql://
+
     if db_url.startswith('postgres://'):
         db_url = db_url.replace('postgres://', 'postgresql://', 1)
-    con = psycopg2.connect(db_url, cursor_factory=psycopg2.extras.RealDictCursor)
+
+    url = db_url.replace('postgresql://', '')
+    user_pass, rest = url.split('@', 1)
+    user, password = user_pass.split(':', 1)
+    host_port, dbname = rest.split('/', 1)
+
+    if ':' in host_port:
+        host, port = host_port.split(':', 1)
+        port = int(port)
+    else:
+        host = host_port
+        port = 5432
+
+    dbname = dbname.split('?')[0]
+
+    con = pg8000.native.Connection(
+        user=user,
+        password=password,
+        host=host,
+        port=port,
+        database=dbname,
+        ssl_context=True
+    )
     return con
 
-def init_db():
-    """Create the expenses table if it doesn't exist."""
-    with get_db() as con:
-        with con.cursor() as cur:
-            cur.execute('''
-                CREATE TABLE IF NOT EXISTS expenses (
-                    id         SERIAL PRIMARY KEY,
-                    user_id    TEXT   NOT NULL,
-                    exp_time   TEXT   NOT NULL,
-                    amount     REAL   NOT NULL,
-                    grp        TEXT   NOT NULL,
-                    sub        TEXT   NOT NULL,
-                    icon       TEXT   NOT NULL,
-                    date       TEXT   NOT NULL,
-                    year_month TEXT   NOT NULL DEFAULT ''
-                )
-            ''')
-        con.commit()
+def run_query(sql, params=(), fetch=None):
+    con = get_db()
+    try:
+        result = con.run(sql, *params) if params else con.run(sql)
+        if fetch == 'all':
+            cols = [c['name'] for c in con.columns]
+            return [dict(zip(cols, row)) for row in result]
+        elif fetch == 'one':
+            cols = [c['name'] for c in con.columns]
+            return dict(zip(cols, result[0])) if result else None
+        return None
+    finally:
+        con.close()
 
-# Call at module level so Gunicorn also runs it
+def run_insert(sql, params=()):
+    con = get_db()
+    try:
+        result = con.run(sql, *params)
+        return result[0][0] if result else None
+    finally:
+        con.close()
+
+def run_write(sql, params=()):
+    con = get_db()
+    try:
+        con.run(sql, *params) if params else con.run(sql)
+    finally:
+        con.close()
+
+def init_db():
+    run_write("""
+        CREATE TABLE IF NOT EXISTS expenses (
+            id         SERIAL PRIMARY KEY,
+            user_id    TEXT   NOT NULL,
+            exp_time   TEXT   NOT NULL,
+            amount     REAL   NOT NULL,
+            grp        TEXT   NOT NULL,
+            sub        TEXT   NOT NULL,
+            icon       TEXT   NOT NULL,
+            date       TEXT   NOT NULL,
+            year_month TEXT   NOT NULL DEFAULT ''
+        )
+    """)
+
 init_db()
 
 # ── ROUTES ────────────────────────────────────────────────────────────────────
@@ -79,51 +124,42 @@ def get_expenses():
     if 'user_id' not in session:
         return jsonify({'ok': False}), 401
     month = request.args.get('month')
-    with get_db() as con:
-        with con.cursor() as cur:
-            if month:
-                cur.execute(
-                    'SELECT * FROM expenses WHERE user_id=%s AND year_month=%s ORDER BY id DESC',
-                    (session['user_id'], month)
-                )
-            else:
-                cur.execute(
-                    'SELECT * FROM expenses WHERE user_id=%s ORDER BY id DESC',
-                    (session['user_id'],)
-                )
-            rows = cur.fetchall()
-    return jsonify([dict(r) for r in rows])
+    if month:
+        rows = run_query(
+            'SELECT * FROM expenses WHERE user_id=$1 AND year_month=$2 ORDER BY id DESC',
+            (session['user_id'], month), fetch='all'
+        )
+    else:
+        rows = run_query(
+            'SELECT * FROM expenses WHERE user_id=$1 ORDER BY id DESC',
+            (session['user_id'],), fetch='all'
+        )
+    return jsonify(rows)
 
 @app.route('/api/monthly-summary', methods=['GET'])
 def monthly_summary():
     if 'user_id' not in session:
         return jsonify({'ok': False}), 401
-    with get_db() as con:
-        with con.cursor() as cur:
-            cur.execute(
-                '''SELECT year_month, SUM(amount) as total, COUNT(*) as count
-                   FROM expenses WHERE user_id=%s
-                   GROUP BY year_month ORDER BY year_month DESC''',
-                (session['user_id'],)
-            )
-            rows = cur.fetchall()
-    return jsonify([dict(r) for r in rows])
+    rows = run_query(
+        """SELECT year_month, SUM(amount) as total, COUNT(*) as count
+           FROM expenses WHERE user_id=$1
+           GROUP BY year_month ORDER BY year_month DESC""",
+        (session['user_id'],), fetch='all'
+    )
+    return jsonify(rows)
 
 @app.route('/api/daily-summary', methods=['GET'])
 def daily_summary():
     if 'user_id' not in session:
         return jsonify({'ok': False}), 401
     month = request.args.get('month', datetime.now().strftime('%Y-%m'))
-    with get_db() as con:
-        with con.cursor() as cur:
-            cur.execute(
-                '''SELECT date, SUM(amount) as total, COUNT(*) as count
-                   FROM expenses WHERE user_id=%s AND year_month=%s
-                   GROUP BY date ORDER BY date DESC''',
-                (session['user_id'], month)
-            )
-            rows = cur.fetchall()
-    return jsonify([dict(r) for r in rows])
+    rows = run_query(
+        """SELECT date, SUM(amount) as total, COUNT(*) as count
+           FROM expenses WHERE user_id=$1 AND year_month=$2
+           GROUP BY date ORDER BY date DESC""",
+        (session['user_id'], month), fetch='all'
+    )
+    return jsonify(rows)
 
 @app.route('/api/expenses', methods=['POST'])
 def add_expense():
@@ -135,25 +171,19 @@ def add_expense():
         year_month = dt.strftime('%Y-%m')
     except Exception:
         year_month = datetime.now().strftime('%Y-%m')
-    with get_db() as con:
-        with con.cursor() as cur:
-            cur.execute(
-                '''INSERT INTO expenses (user_id, exp_time, amount, grp, sub, icon, date, year_month)
-                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id''',
-                (session['user_id'], d['exp_time'], d['amount'], d['grp'], d['sub'], d['icon'], d['date'], year_month)
-            )
-            new_id = cur.fetchone()['id']
-        con.commit()
+
+    new_id = run_insert(
+        """INSERT INTO expenses (user_id, exp_time, amount, grp, sub, icon, date, year_month)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id""",
+        (session['user_id'], d['exp_time'], d['amount'], d['grp'], d['sub'], d['icon'], d['date'], year_month)
+    )
     return jsonify({'ok': True, 'id': new_id, 'year_month': year_month})
 
 @app.route('/api/expenses/<int:eid>', methods=['DELETE'])
 def delete_expense(eid):
     if 'user_id' not in session:
         return jsonify({'ok': False}), 401
-    with get_db() as con:
-        with con.cursor() as cur:
-            cur.execute('DELETE FROM expenses WHERE id=%s AND user_id=%s', (eid, session['user_id']))
-        con.commit()
+    run_write('DELETE FROM expenses WHERE id=$1 AND user_id=$2', (eid, session['user_id']))
     return jsonify({'ok': True})
 
 @app.route('/api/expenses/clear', methods=['DELETE'])
@@ -161,13 +191,10 @@ def clear_expenses():
     if 'user_id' not in session:
         return jsonify({'ok': False}), 401
     month = request.args.get('month')
-    with get_db() as con:
-        with con.cursor() as cur:
-            if month:
-                cur.execute('DELETE FROM expenses WHERE user_id=%s AND year_month=%s', (session['user_id'], month))
-            else:
-                cur.execute('DELETE FROM expenses WHERE user_id=%s', (session['user_id'],))
-        con.commit()
+    if month:
+        run_write('DELETE FROM expenses WHERE user_id=$1 AND year_month=$2', (session['user_id'], month))
+    else:
+        run_write('DELETE FROM expenses WHERE user_id=$1', (session['user_id'],))
     return jsonify({'ok': True})
 
 if __name__ == '__main__':
