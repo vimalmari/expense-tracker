@@ -86,8 +86,8 @@ const CATEGORIES = {
 let currentUser    = null;
 let selectedMember = null;
 let enteredPin     = '';
-let allExpenses    = [];          // expenses for current viewed month
-let currentMonth   = fmtYearMonth(new Date()); // "YYYY-MM"
+let allExpenses    = [];
+let currentMonth   = fmtYearMonth(new Date());
 let currentLang    = localStorage.getItem('dddv-lang')  || 'en';
 let currentTheme   = localStorage.getItem('dddv-theme') || 'dark';
 let activeTab      = 'today';
@@ -119,7 +119,6 @@ window.addEventListener('DOMContentLoaded',()=>{
   buildNumpad();
   populateCategoryGroups();
   showScreen('loginScreen');
-  // Set today's time as default
   const now=new Date();
   const hh=String(now.getHours()).padStart(2,'0');
   const mm=String(now.getMinutes()).padStart(2,'0');
@@ -255,8 +254,14 @@ function switchTab(tab){
 
 /* ============================================================ DATA */
 async function loadMonthExpenses(){
-  const res=await fetch(`/api/expenses?month=${currentMonth}`);
-  allExpenses=await res.json();
+  try{
+    const res=await fetch(`/api/expenses?month=${currentMonth}`);
+    if(res.status===401){logout();return;}
+    const data=await res.json();
+    allExpenses=Array.isArray(data)?data:[];
+  }catch(e){
+    allExpenses=[];
+  }
 }
 
 async function changeMonth(dir){
@@ -274,9 +279,14 @@ function updateMonthLabel(){
 }
 
 async function loadHistory(){
-  const res=await fetch('/api/monthly-summary');
-  const data=await res.json();
-  renderHistory(data);
+  try{
+    const res=await fetch('/api/monthly-summary');
+    if(res.status===401){logout();return;}
+    const data=await res.json();
+    renderHistory(data);
+  }catch(e){
+    renderHistory([]);
+  }
 }
 
 /* ============================================================ RENDER */
@@ -290,21 +300,13 @@ function renderAll(){
 function renderTodayPanel(){
   const today=todayStr();
   const todayExp=allExpenses.filter(e=>e.date===today);
-
-  // Hero
   const total=todayExp.reduce((s,e)=>s+e.amount,0);
   document.getElementById('todayAmount').textContent=fmt(total);
   const cnt=todayExp.length;
   document.getElementById('todayCount').textContent=`${cnt} ${cnt!==1?t('expenses'):t('expense')}`;
-
-  // Date label
   const heroDate=document.getElementById('heroDate');
   if(heroDate) heroDate.textContent=new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'});
-
-  // Category pills
   renderCatPills('todayCatSummary', todayExp);
-
-  // List
   renderExpenseList('todayList','todayEmpty', todayExp);
 }
 
@@ -314,7 +316,6 @@ function renderMonthPanel(){
   document.getElementById('monthAmount').textContent=fmt(total);
   const cnt=allExpenses.length;
   document.getElementById('monthCount').textContent=`${cnt} ${cnt!==1?t('expenses'):t('expense')}`;
-
   renderCatPills('monthCatSummary', allExpenses);
   renderDailyBreakdown();
   renderExpenseList('monthList','monthEmpty', allExpenses);
@@ -339,7 +340,6 @@ function renderCatPills(containerId, expList){
 function renderDailyBreakdown(){
   const container=document.getElementById('dailyList');
   container.innerHTML='';
-  // group by date
   const byDate={};
   allExpenses.forEach(e=>{
     if(!byDate[e.date]) byDate[e.date]={total:0,count:0};
@@ -470,38 +470,52 @@ async function addExpense(){
   if(!sub){showError(t('errSub'));subEl.focus();return;}
   document.getElementById('errorMsg').textContent='';
   const today=todayStr();
-  const res=await fetch('/api/expenses',{
-    method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({exp_time:expTime,amount,grp,sub,icon:CATEGORIES[grp].icon,date:today}),
-  });
-  const data=await res.json();
-  if(data.ok){
-    const newExp={id:data.id,user_id:currentUser.id,exp_time:expTime,amount,grp,sub,icon:CATEGORIES[grp].icon,date:today,year_month:data.year_month||currentMonth};
-    // If this expense belongs to currently viewed month, add it
-    if(newExp.year_month===currentMonth) allExpenses.unshift(newExp);
-    renderAll();
-    amtEl.value='';grpEl.value='';subEl.value='';
-    document.getElementById('subCatField').style.display='none';
-    // Reset time to now
-    const now=new Date();
-    timeEl.value=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-    // Go to today tab to see the result
-    switchTab('today');
+  try{
+    const res=await fetch('/api/expenses',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({exp_time:expTime,amount,grp,sub,icon:CATEGORIES[grp].icon,date:today}),
+    });
+    if(res.status===401){showError('Session expired. Please login again.');setTimeout(()=>logout(),2000);return;}
+    const data=await res.json();
+    if(data.ok){
+      const newExp={id:data.id,user_id:currentUser.id,exp_time:expTime,amount,grp,sub,icon:CATEGORIES[grp].icon,date:today,year_month:data.year_month||currentMonth};
+      if(newExp.year_month===currentMonth) allExpenses.unshift(newExp);
+      renderAll();
+      amtEl.value='';grpEl.value='';subEl.value='';
+      document.getElementById('subCatField').style.display='none';
+      const now=new Date();
+      timeEl.value=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+      switchTab('today');
+    } else {
+      showError('Failed to save expense. Please try again.');
+    }
+  }catch(e){
+    showError('Network error. Please check your connection.');
   }
 }
 
 async function deleteExpense(id){
-  await fetch(`/api/expenses/${id}`,{method:'DELETE'});
-  allExpenses=allExpenses.filter(e=>e.id!==id);
-  renderAll();
+  try{
+    const res=await fetch(`/api/expenses/${id}`,{method:'DELETE'});
+    if(res.status===401){logout();return;}
+    allExpenses=allExpenses.filter(e=>e.id!==id);
+    renderAll();
+  }catch(e){
+    showError('Failed to delete. Please try again.');
+  }
 }
 
 async function clearMonth(){
   if(allExpenses.length===0) return;
   if(!confirm(t('confirmClear'))) return;
-  await fetch(`/api/expenses/clear?month=${currentMonth}`,{method:'DELETE'});
-  allExpenses=[];
-  renderAll();
+  try{
+    const res=await fetch(`/api/expenses/clear?month=${currentMonth}`,{method:'DELETE'});
+    if(res.status===401){logout();return;}
+    allExpenses=[];
+    renderAll();
+  }catch(e){
+    showError('Failed to clear. Please try again.');
+  }
 }
 
 /* ── HELPERS ── */
