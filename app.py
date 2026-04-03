@@ -1,10 +1,10 @@
 from flask import Flask, render_template, request, jsonify, session
-import os, pg8000.native
+import os
+import pg8000.dbapi
 from datetime import datetime
 
 app = Flask(__name__)
 
-# Secret key — MUST be set as environment variable on Render
 secret = os.environ.get('SECRET_KEY')
 if not secret:
     raise RuntimeError("SECRET_KEY environment variable is not set!")
@@ -43,47 +43,46 @@ def get_db():
 
     dbname = dbname.split('?')[0]
 
-    con = pg8000.native.Connection(
+    import ssl
+    ssl_context = ssl.create_default_context()
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
+
+    con = pg8000.dbapi.connect(
         user=user,
         password=password,
         host=host,
         port=port,
         database=dbname,
-        ssl_context=True
+        ssl_context=ssl_context
     )
     return con
 
-def run_query(sql, params=(), fetch=None):
+def query(sql, params=None):
     con = get_db()
     try:
-        result = con.run(sql, parameters=list(params)) if params else con.run(sql)
-        if fetch == 'all':
-            cols = [c['name'] for c in con.columns]
-            return [dict(zip(cols, row)) for row in result]
-        elif fetch == 'one':
-            cols = [c['name'] for c in con.columns]
-            return dict(zip(cols, result[0])) if result else None
-        return None
+        cur = con.cursor()
+        cur.execute(sql, params or [])
+        cols = [d[0] for d in cur.description] if cur.description else []
+        rows = cur.fetchall() if cur.description else []
+        con.commit()
+        return [dict(zip(cols, row)) for row in rows]
     finally:
         con.close()
 
-def run_insert(sql, params=()):
+def execute(sql, params=None):
     con = get_db()
     try:
-        result = con.run(sql, parameters=list(params))
-        return result[0][0] if result else None
-    finally:
-        con.close()
-
-def run_write(sql, params=()):
-    con = get_db()
-    try:
-        con.run(sql, parameters=list(params)) if params else con.run(sql)
+        cur = con.cursor()
+        cur.execute(sql, params or [])
+        result = cur.fetchall() if cur.description else []
+        con.commit()
+        return result
     finally:
         con.close()
 
 def init_db():
-    run_write("""
+    execute("""
         CREATE TABLE IF NOT EXISTS expenses (
             id         SERIAL PRIMARY KEY,
             user_id    TEXT   NOT NULL,
@@ -127,14 +126,14 @@ def get_expenses():
         return jsonify({'ok': False}), 401
     month = request.args.get('month')
     if month:
-        rows = run_query(
-            'SELECT * FROM expenses WHERE user_id=$1 AND year_month=$2 ORDER BY id DESC',
-            (session['user_id'], month), fetch='all'
+        rows = query(
+            'SELECT * FROM expenses WHERE user_id=%s AND year_month=%s ORDER BY id DESC',
+            [session['user_id'], month]
         )
     else:
-        rows = run_query(
-            'SELECT * FROM expenses WHERE user_id=$1 ORDER BY id DESC',
-            (session['user_id'],), fetch='all'
+        rows = query(
+            'SELECT * FROM expenses WHERE user_id=%s ORDER BY id DESC',
+            [session['user_id']]
         )
     return jsonify(rows)
 
@@ -142,11 +141,11 @@ def get_expenses():
 def monthly_summary():
     if 'user_id' not in session:
         return jsonify({'ok': False}), 401
-    rows = run_query(
+    rows = query(
         """SELECT year_month, SUM(amount) as total, COUNT(*) as count
-           FROM expenses WHERE user_id=$1
+           FROM expenses WHERE user_id=%s
            GROUP BY year_month ORDER BY year_month DESC""",
-        (session['user_id'],), fetch='all'
+        [session['user_id']]
     )
     return jsonify(rows)
 
@@ -155,11 +154,11 @@ def daily_summary():
     if 'user_id' not in session:
         return jsonify({'ok': False}), 401
     month = request.args.get('month', datetime.now().strftime('%Y-%m'))
-    rows = run_query(
+    rows = query(
         """SELECT date, SUM(amount) as total, COUNT(*) as count
-           FROM expenses WHERE user_id=$1 AND year_month=$2
+           FROM expenses WHERE user_id=%s AND year_month=%s
            GROUP BY date ORDER BY date DESC""",
-        (session['user_id'], month), fetch='all'
+        [session['user_id'], month]
     )
     return jsonify(rows)
 
@@ -174,18 +173,19 @@ def add_expense():
     except Exception:
         year_month = datetime.now().strftime('%Y-%m')
 
-    new_id = run_insert(
+    result = execute(
         """INSERT INTO expenses (user_id, exp_time, amount, grp, sub, icon, date, year_month)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id""",
-        (session['user_id'], d['exp_time'], d['amount'], d['grp'], d['sub'], d['icon'], d['date'], year_month)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+        [session['user_id'], d['exp_time'], d['amount'], d['grp'], d['sub'], d['icon'], d['date'], year_month]
     )
+    new_id = result[0][0] if result else None
     return jsonify({'ok': True, 'id': new_id, 'year_month': year_month})
 
 @app.route('/api/expenses/<int:eid>', methods=['DELETE'])
 def delete_expense(eid):
     if 'user_id' not in session:
         return jsonify({'ok': False}), 401
-    run_write('DELETE FROM expenses WHERE id=$1 AND user_id=$2', (eid, session['user_id']))
+    execute('DELETE FROM expenses WHERE id=%s AND user_id=%s', [eid, session['user_id']])
     return jsonify({'ok': True})
 
 @app.route('/api/expenses/clear', methods=['DELETE'])
@@ -194,9 +194,9 @@ def clear_expenses():
         return jsonify({'ok': False}), 401
     month = request.args.get('month')
     if month:
-        run_write('DELETE FROM expenses WHERE user_id=$1 AND year_month=$2', (session['user_id'], month))
+        execute('DELETE FROM expenses WHERE user_id=%s AND year_month=%s', [session['user_id'], month])
     else:
-        run_write('DELETE FROM expenses WHERE user_id=$1', (session['user_id'],))
+        execute('DELETE FROM expenses WHERE user_id=%s', [session['user_id']])
     return jsonify({'ok': True})
 
 if __name__ == '__main__':
