@@ -56,7 +56,7 @@ def get_db():
 def run_query(sql, params=(), fetch=None):
     con = get_db()
     try:
-        result = con.run(sql, *params) if params else con.run(sql)
+        result = con.run(sql, parameters=list(params)) if params else con.run(sql)
         if fetch == 'all':
             cols = [c['name'] for c in con.columns]
             return [dict(zip(cols, row)) for row in result]
@@ -70,7 +70,7 @@ def run_query(sql, params=(), fetch=None):
 def run_insert(sql, params=()):
     con = get_db()
     try:
-        result = con.run(sql, *params)
+        result = con.run(sql, parameters=list(params))
         return result[0][0] if result else None
     finally:
         con.close()
@@ -78,7 +78,7 @@ def run_insert(sql, params=()):
 def run_write(sql, params=()):
     con = get_db()
     try:
-        con.run(sql, *params) if params else con.run(sql)
+        con.run(sql, parameters=list(params)) if params else con.run(sql)
     finally:
         con.close()
 
