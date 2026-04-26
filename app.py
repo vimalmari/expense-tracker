@@ -30,12 +30,21 @@ def get_db():
     host     = parsed.hostname
     port     = parsed.port or 5432
     dbname   = parsed.path.lstrip('/')
+
+    # Supabase pooler requires this exact format
+    # user must include the project ref like: postgres.projectref
     ssl_context = ssl.create_default_context()
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
+
     con = pg8000.dbapi.connect(
-        user=user, password=password, host=host,
-        port=port, database=dbname, ssl_context=ssl_context
+        user=user,
+        password=password,
+        host=host,
+        port=port,
+        database=dbname,
+        ssl_context=ssl_context,
+        application_name="expense-tracker"
     )
     return con
 
@@ -97,7 +106,14 @@ def init_db():
         )
     """)
 
-init_db()
+@app.before_request
+def ensure_db():
+    if not getattr(app, "_db_initialized", False):
+        try:
+            init_db()
+            app._db_initialized = True
+        except Exception as e:
+            print(f"DB init error: {e}")
 
 # ── EMAIL OTP ─────────────────────────────────────────────────────────────────
 
