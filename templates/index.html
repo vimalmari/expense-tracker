@@ -228,6 +228,14 @@
             <input type="number" id="amount" placeholder="0.00" min="0" step="0.01" inputmode="decimal" />
           </div>
           <div class="field-group">
+            <label>Description <span style="font-size:11px;color:var(--ink-muted)">(optional &middot; விவரம்)</span></label>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input type="text" id="expDescription" placeholder="e.g. Lunch / குடும்பத்துடன் சாப்பிட்டேன்" style="flex:1;" />
+              <button type="button" id="micBtn" onclick="startVoice()" title="Speak" style="width:42px;height:42px;border-radius:50%;border:2px solid var(--accent);background:transparent;color:var(--accent);font-size:18px;cursor:pointer;flex-shrink:0;transition:all 0.2s;">🎙️</button>
+            </div>
+            <p id="voiceStatus" style="font-size:11px;color:var(--ink-muted);margin-top:4px;min-height:16px;"></p>
+          </div>
+          <div class="field-group">
             <label data-i18n="categoryGroup">Category Group</label>
             <div class="select-wrap">
               <select id="catGroup" onchange="onGroupChange()">
