@@ -404,3 +404,119 @@ body{
 
 /* Tamil font support */
 [data-lang="ta"] body{font-family:'Noto Sans Tamil','Sora',sans-serif;}
+
+/* ============================================================
+   AUTH CARD — Email OTP Login
+   ============================================================ */
+.login-wrapper{
+  position:relative;z-index:1;
+  max-width:480px;margin:0 auto;
+  padding:40px 20px 60px;
+  min-height:100vh;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:24px;
+}
+.login-top{text-align:center;}
+.app-logo{font-size:52px;line-height:1;margin-bottom:8px;}
+.login-title{
+  font-size:clamp(28px,7vw,38px);font-weight:800;line-height:1.15;
+  letter-spacing:-1px;margin-bottom:6px;
+}
+.login-title span{color:var(--accent);}
+.login-sub{color:var(--ink-muted);font-size:14px;}
+
+.auth-card{
+  width:100%;max-width:400px;
+  background:var(--surface);
+  border:1px solid var(--glass-border);
+  border-radius:24px;padding:24px 20px;
+  display:flex;flex-direction:column;gap:16px;
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+}
+.auth-card-title{
+  font-size:18px;font-weight:700;color:var(--ink);text-align:center;
+}
+.auth-btn{
+  background:linear-gradient(135deg,var(--accent),var(--accent-2));
+  border:none;border-radius:14px;padding:15px;
+  color:#fff;font-size:15px;font-weight:700;font-family:'Sora',sans-serif;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;
+  transition:opacity .15s,transform .1s;
+  width:100%;
+}
+.auth-btn:active{opacity:0.85;transform:scale(0.98);}
+.auth-btn:disabled{opacity:0.6;cursor:not-allowed;}
+.btn-arrow{font-size:18px;}
+.auth-error{
+  color:var(--red);font-size:13px;min-height:16px;
+  text-align:center;font-weight:500;
+}
+.auth-note{color:var(--ink-faint);font-size:12px;text-align:center;}
+.auth-link{
+  background:none;border:none;color:var(--ink-muted);
+  font-size:13px;font-family:'Sora',sans-serif;
+  cursor:pointer;text-align:center;padding:4px;
+  transition:color .15s;
+}
+.auth-link:hover{color:var(--accent);}
+
+/* OTP Sent label */
+.otp-sent-to{
+  font-size:13px;color:var(--ink-muted);text-align:center;margin:-4px 0;
+}
+.otp-sent-to strong{color:var(--ink);}
+
+/* 6-box OTP input */
+.otp-input-group{
+  display:flex;gap:8px;justify-content:center;
+}
+.otp-box{
+  width:44px;height:52px;
+  border-radius:12px;border:2px solid var(--glass-border);
+  background:var(--surface-2);color:var(--ink);
+  font-size:22px;font-weight:700;font-family:'Sora',sans-serif;
+  text-align:center;outline:none;
+  -moz-appearance:textfield;
+  transition:border-color .2s,box-shadow .2s;
+  /* hide number spinners */
+}
+.otp-box::-webkit-outer-spin-button,
+.otp-box::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+.otp-box:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);}
+.otp-box.otp-error{border-color:var(--red);animation:shake .4s ease;}
+
+/* Resend row */
+.resend-row{display:flex;align-items:center;justify-content:center;gap:8px;min-height:24px;}
+.resend-timer{font-size:12px;color:var(--ink-faint);}
+
+/* Login controls (theme+lang on login page) */
+.login-controls{display:flex;gap:10px;margin-top:4px;}
+
+/* ============================================================
+   TOPBAR ADJUSTMENTS
+   ============================================================ */
+.topbar-right{display:flex;align-items:center;gap:8px;}
+.ctrl-btn{
+  display:flex;align-items:center;gap:4px;
+  background:var(--ctrl-bg);border:1px solid var(--glass-border);
+  border-radius:100px;color:var(--ink);
+  font-family:'Sora',sans-serif;font-size:12px;font-weight:600;
+  padding:6px 10px;cursor:pointer;
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  transition:background .15s,transform .1s;
+  white-space:nowrap;
+}
+.ctrl-btn:active{background:var(--ctrl-hover);transform:scale(0.95);}
+.logout-btn{
+  background:none;border:1px solid var(--border);
+  border-radius:100px;color:var(--ink-muted);
+  font-size:14px;padding:6px 10px;cursor:pointer;
+  transition:color .15s,border-color .15s;
+}
+.logout-btn:active{color:var(--red);border-color:var(--red);}
+
+@media(max-width:380px){
+  .otp-box{width:38px;height:46px;font-size:18px;}
+  .otp-input-group{gap:5px;}
+  .auth-card{padding:20px 14px;}
+}
