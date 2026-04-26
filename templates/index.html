@@ -5,8 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="theme-color" content="#0f0e17" id="themeColorMeta" />
-  <title>DDDV Family Expense</title>
+  <meta name="theme-color" content="#0d0d14" id="themeColorMeta" />
+  <meta name="description" content="Track your daily expenses easily" />
+  <title>Expense Tracker</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="/static/manifest.json" />
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png" />
+  <link rel="icon" type="image/png" href="/static/icons/favicon-32.png" />
+
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Noto+Sans+Tamil:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -22,29 +29,76 @@
     </div>
     <div class="login-wrapper">
       <div class="login-top">
-        <div class="app-logo">🏠</div>
-        <h1 class="login-title">DDDV<br><span data-i18n="appSubtitle">Family Expense</span></h1>
-        <p class="login-sub" data-i18n="whoLogging">Who's logging in today?</p>
+        <div class="app-logo">💰</div>
+        <h1 class="login-title">Expense<br><span>Tracker</span></h1>
+        <p class="login-sub" data-i18n="loginSub">Track your spending — simple & private</p>
       </div>
-      <div class="member-grid" id="memberGrid">
-        {% for m in family %}
-        <div class="member-card {{ m.id }}" onclick="selectMember('{{ m.id }}','{{ m.name }}','{{ m.emoji }}')">
-          <div class="member-emoji">{{ m.emoji }}</div>
-          <div class="member-label">{{ m.name }}</div>
+
+      <!-- STEP 1: Email + Name -->
+      <div class="auth-card" id="emailStep">
+        <div class="auth-card-title" data-i18n="getStarted">Get Started</div>
+
+        <div class="field-group">
+          <label data-i18n="yourName">Your Name</label>
+          <input type="text" id="userName" placeholder="e.g. Rajesh Kumar"
+                 autocomplete="name" inputmode="text" />
         </div>
-        {% endfor %}
+
+        <div class="field-group">
+          <label data-i18n="yourEmail">Email Address</label>
+          <input type="email" id="userEmail" placeholder="you@gmail.com"
+                 autocomplete="email" inputmode="email" />
+        </div>
+
+        <p class="auth-error" id="emailError"></p>
+
+        <button class="auth-btn" id="sendOtpBtn" onclick="sendOTP()">
+          <span data-i18n="sendOtp">Send OTP</span> <span class="btn-arrow">→</span>
+        </button>
+
+        <p class="auth-note" data-i18n="otpNote">We'll send a 6-digit code to your email</p>
       </div>
-      <div class="pin-section" id="pinSection" style="display:none">
-        <div class="pin-header">
-          <button class="back-btn" onclick="goBackToMembers()"><span>←</span> <span data-i18n="back">Back</span></button>
-          <p class="pin-prompt"><span data-i18n="enterPin">Enter PIN for</span> <strong id="pinForName"></strong></p>
+
+      <!-- STEP 2: OTP Entry -->
+      <div class="auth-card hidden" id="otpStep">
+        <div class="auth-card-title" data-i18n="checkEmail">Check Your Email</div>
+        <p class="otp-sent-to">OTP sent to <strong id="otpSentTo"></strong></p>
+
+        <div class="otp-input-group">
+          <input class="otp-box" type="number" maxlength="1" inputmode="numeric" />
+          <input class="otp-box" type="number" maxlength="1" inputmode="numeric" />
+          <input class="otp-box" type="number" maxlength="1" inputmode="numeric" />
+          <input class="otp-box" type="number" maxlength="1" inputmode="numeric" />
+          <input class="otp-box" type="number" maxlength="1" inputmode="numeric" />
+          <input class="otp-box" type="number" maxlength="1" inputmode="numeric" />
         </div>
-        <div class="pin-dots" id="pinDots">
-          <span class="dot"></span><span class="dot"></span>
-          <span class="dot"></span><span class="dot"></span>
+
+        <p class="auth-error" id="otpError"></p>
+
+        <button class="auth-btn" id="verifyOtpBtn" onclick="verifyOTP()">
+          <span data-i18n="verifyOtp">Verify OTP</span> <span class="btn-arrow">✓</span>
+        </button>
+
+        <button class="auth-link" onclick="goBackToEmail()" data-i18n="changeEmail">
+          ← Use different email
+        </button>
+
+        <div class="resend-row">
+          <span class="resend-timer" id="resendTimer"></span>
+          <button class="auth-link" id="resendBtn" onclick="resendOTP()" style="display:none" data-i18n="resendOtp">
+            Resend OTP
+          </button>
         </div>
-        <div class="pin-error" id="pinError"></div>
-        <div class="numpad" id="numpad"></div>
+      </div>
+
+      <!-- Lang + Theme controls on login -->
+      <div class="login-controls">
+        <button class="ctrl-btn" onclick="toggleLanguage()">
+          <span>🌐</span><span id="langLabelLogin">தமிழ்</span>
+        </button>
+        <button class="ctrl-btn" onclick="toggleTheme()">
+          <span id="themeIconLogin">☀️</span>
+        </button>
       </div>
     </div>
   </div>
@@ -55,10 +109,10 @@
     <!-- TOPBAR -->
     <nav class="topbar">
       <div class="topbar-left">
-        <div class="user-avatar" id="userAvatar"></div>
+        <div class="user-avatar" id="userAvatar">👤</div>
         <div class="user-info">
           <span class="welcome-text" data-i18n="welcomeBack">Welcome back</span>
-          <span class="user-name" id="userName"></span>
+          <span class="user-name" id="userNameDisplay"></span>
         </div>
       </div>
       <div class="topbar-right">
@@ -68,7 +122,7 @@
         <button class="ctrl-btn theme-btn" onclick="toggleTheme()" title="Toggle Theme">
           <span id="themeIcon">☀️</span>
         </button>
-        <button class="logout-btn" onclick="logout()">
+        <button class="logout-btn" onclick="logout()" title="Logout">
           <span>⏻</span>
         </button>
       </div>
@@ -92,7 +146,7 @@
 
     <div class="app-content">
 
-      <!-- ========== TAB: TODAY ========== -->
+      <!-- TAB: TODAY -->
       <div class="tab-panel" id="panel-today">
         <div class="hero-card">
           <div class="hero-date" id="heroDate"></div>
@@ -100,12 +154,10 @@
           <div class="hero-amount" id="todayAmount">₹0.00</div>
           <div class="hero-count" id="todayCount">0 <span data-i18n="expenses">expenses</span></div>
         </div>
-
         <div class="section-header">
           <h2 class="section-title" data-i18n="byGroup">By Group</h2>
         </div>
         <div class="cat-summary-scroll" id="todayCatSummary"></div>
-
         <div class="list-card">
           <div class="list-header">
             <h2 class="section-title" data-i18n="todayList">Today's Expenses</h2>
@@ -118,32 +170,26 @@
         </div>
       </div>
 
-      <!-- ========== TAB: THIS MONTH ========== -->
+      <!-- TAB: THIS MONTH -->
       <div class="tab-panel hidden" id="panel-month">
-        <!-- Month picker -->
         <div class="month-nav">
-          <button class="month-nav-btn" onclick="changeMonth(-1)">‹</button>
+          <button class="month-nav-btn" onclick="changeMonth(-1)">&#8249;</button>
           <span class="month-label" id="monthLabel"></span>
-          <button class="month-nav-btn" onclick="changeMonth(1)">›</button>
+          <button class="month-nav-btn" onclick="changeMonth(1)">&#8250;</button>
         </div>
-
         <div class="hero-card hero-card--month">
           <div class="hero-label" data-i18n="monthSpent">Monthly Spending</div>
           <div class="hero-amount" id="monthAmount">₹0.00</div>
           <div class="hero-count" id="monthCount">0 <span data-i18n="expenses">expenses</span></div>
         </div>
-
         <div class="section-header">
           <h2 class="section-title" data-i18n="byGroup">By Group</h2>
         </div>
         <div class="cat-summary-scroll" id="monthCatSummary"></div>
-
-        <!-- Daily breakdown -->
         <div class="section-header">
           <h2 class="section-title" data-i18n="dailyBreakdown">Daily Breakdown</h2>
         </div>
         <div class="daily-list" id="dailyList"></div>
-
         <div class="list-card" style="margin-top:16px">
           <div class="list-header">
             <h2 class="section-title" data-i18n="allExpenses">All Expenses</h2>
@@ -151,13 +197,13 @@
           </div>
           <div class="empty-state" id="monthEmpty">
             <div class="empty-icon">📊</div>
-            <p data-i18n="noExpenses">No expenses this month.</p>
+            <p data-i18n="noExpensesMonth">No expenses this month.</p>
           </div>
           <ul class="expense-list" id="monthList"></ul>
         </div>
       </div>
 
-      <!-- ========== TAB: HISTORY ========== -->
+      <!-- TAB: HISTORY -->
       <div class="tab-panel hidden" id="panel-history">
         <div class="section-header">
           <h2 class="section-title" data-i18n="monthlyHistory">Monthly History</h2>
@@ -169,41 +215,35 @@
         <div class="history-list" id="historyList"></div>
       </div>
 
-      <!-- ========== TAB: ADD ========== -->
+      <!-- TAB: ADD -->
       <div class="tab-panel hidden" id="panel-add">
         <div class="form-card">
           <h2 class="section-title" data-i18n="addExpense">Add Expense</h2>
-
           <div class="field-group">
             <label data-i18n="time">Time</label>
             <input type="time" id="expTime" />
           </div>
-
           <div class="field-group">
-            <label data-i18n="amount">Amount (₹)</label>
+            <label data-i18n="amount">Amount (&#8377;)</label>
             <input type="number" id="amount" placeholder="0.00" min="0" step="0.01" inputmode="decimal" />
           </div>
-
           <div class="field-group">
             <label data-i18n="categoryGroup">Category Group</label>
             <div class="select-wrap">
               <select id="catGroup" onchange="onGroupChange()">
-                <option value="" data-i18n="selectGroup">— Select Group —</option>
+                <option value="" data-i18n="selectGroup">-- Select Group --</option>
               </select>
             </div>
           </div>
-
           <div class="field-group" id="subCatField" style="display:none">
             <label data-i18n="subCategory">Sub-category</label>
             <div class="select-wrap">
               <select id="catSub">
-                <option value="" data-i18n="selectSub">— Select Sub-category —</option>
+                <option value="" data-i18n="selectSub">-- Select Sub-category --</option>
               </select>
             </div>
           </div>
-
           <p class="error-msg" id="errorMsg"></p>
-
           <button class="add-btn" onclick="addExpense()">
             <span class="plus-icon">+</span> <span data-i18n="addExpense">Add Expense</span>
           </button>
