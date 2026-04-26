@@ -162,7 +162,7 @@ let activeTab    = 'today';
 let resendCountdown = null;
 
 /* ── HELPERS ── */
-function fmtYearMonth(d){ return d.toISOString().slice(0,7); }
+function fmtYearMonth(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
 function todayStr(){ return new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}); }
 function fmt(n){ return '₹'+n.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function esc(s){ const d=document.createElement('div'); d.appendChild(document.createTextNode(s)); return d.innerHTML; }
