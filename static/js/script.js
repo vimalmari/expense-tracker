@@ -478,10 +478,11 @@ function renderExpenseList(listId, emptyId, expList){
   list.innerHTML='';
   expList.forEach(exp=>{
     const li=document.createElement('li'); li.className='expense-item';
+    const subLabel = exp.description ? exp.description : (exp.sub || '');
     li.innerHTML=`
       <div class="expense-icon">${esc(exp.icon)}</div>
       <div class="expense-info">
-        <div class="expense-desc">🕐 ${esc(exp.exp_time)} · ${esc(exp.sub)}</div>
+        <div class="expense-desc">🕐 ${esc(exp.exp_time)} · ${esc(subLabel)}</div>
         <div class="expense-meta">${esc(exp.date)}</div>
       </div>
       <div class="expense-right">
@@ -552,25 +553,30 @@ async function addExpense(){
   const amtEl=document.getElementById('amount');
   const grpEl=document.getElementById('catGroup');
   const subEl=document.getElementById('catSub');
+  const descEl=document.getElementById('expDescription');
   const expTime=timeEl.value, amount=parseFloat(amtEl.value), grp=grpEl.value, sub=subEl.value;
+  const description=descEl ? descEl.value.trim() : '';
   if(!expTime){ showError(t('errTime')); timeEl.focus(); return; }
   if(!amount||amount<=0){ showError(t('errAmount')); amtEl.focus(); return; }
-  if(!grp){ showError(t('errGroup')); grpEl.focus(); return; }
-  if(!sub){ showError(t('errSub')); subEl.focus(); return; }
+  // Category is required only if no description
+  if(!description && !grp){ showError(currentLang==='ta'?'வகை தேர்வு செய்யவும் அல்லது விவரம் எழுதவும்':'Select a category or enter a description.'); return; }
+  if(grp && !sub){ showError(t('errSub')); subEl.focus(); return; }
   document.getElementById('errorMsg').textContent='';
   const today=todayStr();
+  const icon = grp ? CATEGORIES[grp].icon : '📝';
   try{
     const res=await fetch('/api/expenses',{
       method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({exp_time:expTime,amount,grp,sub,icon:CATEGORIES[grp].icon,date:today}),
+      body:JSON.stringify({exp_time:expTime,amount,grp,sub,icon,date:today,description}),
     });
     if(res.status===401){ showError('Session expired.'); setTimeout(()=>logout(),2000); return; }
     const data=await res.json();
     if(data.ok){
-      const newExp={id:data.id,user_id:currentUser.id,exp_time:expTime,amount,grp,sub,icon:CATEGORIES[grp].icon,date:today,year_month:data.year_month||currentMonth};
+      const newExp={id:data.id,user_id:currentUser.id,exp_time:expTime,amount,grp,sub,icon,date:today,year_month:data.year_month||currentMonth,description};
       if(newExp.year_month===currentMonth) allExpenses.unshift(newExp);
       renderAll();
       amtEl.value=''; grpEl.value=''; subEl.value='';
+      if(descEl) descEl.value='';
       document.getElementById('subCatField').style.display='none';
       const now=new Date();
       timeEl.value=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
@@ -601,3 +607,55 @@ async function clearMonth(){
 
 function showError(msg){ const el=document.getElementById('errorMsg'); el.textContent=msg; setTimeout(()=>{el.textContent='';},3000); }
 function showScreen(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden')); document.getElementById(id).classList.remove('hidden'); }
+
+/* ============================================================ VOICE INPUT */
+let recognition = null;
+
+function startVoice() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    document.getElementById('voiceStatus').textContent = 'Voice not supported in this browser.';
+    return;
+  }
+
+  const micBtn = document.getElementById('micBtn');
+  const statusEl = document.getElementById('voiceStatus');
+
+  if (recognition) {
+    recognition.stop();
+    return;
+  }
+
+  recognition = new SpeechRecognition();
+  recognition.lang = currentLang === 'ta' ? 'ta-IN' : 'en-IN';
+  recognition.interimResults = true;
+  recognition.continuous = false;
+
+  micBtn.textContent = '⏹️';
+  micBtn.style.borderColor = '#e74c3c';
+  micBtn.style.color = '#e74c3c';
+  statusEl.textContent = currentLang === 'ta' ? 'கேட்கிறது...' : 'Listening...';
+
+  recognition.onresult = (e) => {
+    const transcript = Array.from(e.results).map(r => r[0].transcript).join('');
+    document.getElementById('expDescription').value = transcript;
+  };
+
+  recognition.onend = () => {
+    micBtn.textContent = '🎙️';
+    micBtn.style.borderColor = 'var(--accent)';
+    micBtn.style.color = 'var(--accent)';
+    statusEl.textContent = '';
+    recognition = null;
+  };
+
+  recognition.onerror = (e) => {
+    statusEl.textContent = currentLang === 'ta' ? 'பிழை ஏற்பட்டது, மீண்டும் முயற்சிக்கவும்.' : 'Error. Please try again.';
+    micBtn.textContent = '🎙️';
+    micBtn.style.borderColor = 'var(--accent)';
+    micBtn.style.color = 'var(--accent)';
+    recognition = null;
+  };
+
+  recognition.start();
+}
