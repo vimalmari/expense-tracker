@@ -18,22 +18,18 @@ GMAIL_PASS = os.environ.get('GMAIL_PASS', '')
 # ── DATABASE ──────────────────────────────────────────────────────────────────
 
 def get_db():
+    from urllib.parse import urlparse, unquote
     db_url = os.environ.get('DATABASE_URL')
     if not db_url:
         raise RuntimeError("DATABASE_URL environment variable is not set!")
     if db_url.startswith('postgres://'):
         db_url = db_url.replace('postgres://', 'postgresql://', 1)
-    url = db_url.replace('postgresql://', '')
-    user_pass, rest = url.split('@', 1)
-    user, password = user_pass.split(':', 1)
-    host_port, dbname = rest.split('/', 1)
-    if ':' in host_port:
-        host, port = host_port.split(':', 1)
-        port = int(port)
-    else:
-        host = host_port
-        port = 5432
-    dbname = dbname.split('?')[0]
+    parsed   = urlparse(db_url)
+    user     = unquote(parsed.username)
+    password = unquote(parsed.password)
+    host     = parsed.hostname
+    port     = parsed.port or 5432
+    dbname   = parsed.path.lstrip('/')
     ssl_context = ssl.create_default_context()
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
