@@ -94,17 +94,24 @@ def init_db():
     # Expenses table
     execute("""
         CREATE TABLE IF NOT EXISTS expenses (
-            id         SERIAL PRIMARY KEY,
-            user_id    INTEGER NOT NULL,
-            exp_time   TEXT    NOT NULL,
-            amount     REAL    NOT NULL,
-            grp        TEXT    NOT NULL,
-            sub        TEXT    NOT NULL,
-            icon       TEXT    NOT NULL,
-            date       TEXT    NOT NULL,
-            year_month TEXT    NOT NULL DEFAULT ''
+            id          SERIAL PRIMARY KEY,
+            user_id     INTEGER NOT NULL,
+            exp_time    TEXT    NOT NULL,
+            amount      REAL    NOT NULL,
+            grp         TEXT    NOT NULL DEFAULT '',
+            sub         TEXT    NOT NULL DEFAULT '',
+            icon        TEXT    NOT NULL DEFAULT '📝',
+            date        TEXT    NOT NULL,
+            year_month  TEXT    NOT NULL DEFAULT '',
+            description TEXT    DEFAULT ''
         )
     """)
+
+# Add description column to existing tables if missing
+try:
+    execute("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS description TEXT DEFAULT ''")
+except Exception:
+    pass
 
 @app.before_request
 def ensure_db():
@@ -328,10 +335,14 @@ def add_expense():
         year_month = dt.strftime('%Y-%m')
     except Exception:
         year_month = datetime.now().strftime('%Y-%m')
+    description = d.get('description', '')
+    grp  = d.get('grp', '')
+    sub  = d.get('sub', '')
+    icon = d.get('icon', '📝')
     result = execute(
-        """INSERT INTO expenses (user_id, exp_time, amount, grp, sub, icon, date, year_month)
-           VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
-        [session['user_id'], d['exp_time'], d['amount'], d['grp'], d['sub'], d['icon'], d['date'], year_month]
+        """INSERT INTO expenses (user_id, exp_time, amount, grp, sub, icon, date, year_month, description)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+        [session['user_id'], d['exp_time'], d['amount'], grp, sub, icon, d['date'], year_month, description]
     )
     new_id = result[0][0] if result else None
     return jsonify({'ok': True, 'id': new_id, 'year_month': year_month})
