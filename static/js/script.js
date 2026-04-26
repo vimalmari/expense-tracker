@@ -4,6 +4,10 @@ function openDetail(exp) {
   const overlay = document.getElementById('detailOverlay');
   const sheet   = document.getElementById('detailSheet');
 
+  // Move both to body to escape any overflow:hidden parent
+  document.body.appendChild(overlay);
+  document.body.appendChild(sheet);
+
   document.getElementById('dsIcon').textContent   = exp.icon || '📝';
   document.getElementById('dsAmount').textContent = fmt(exp.amount);
   document.getElementById('dsTime').textContent   = exp.exp_time;
@@ -38,19 +42,29 @@ function openDetail(exp) {
     closeDetail();
   };
 
+  // Reset transform before showing
+  sheet.style.transform = 'translateY(100%)';
+  overlay.style.opacity = '0';
   overlay.style.display = 'block';
   sheet.style.display   = 'block';
+
+  // Lock body scroll
+  document.body.style.overflow = 'hidden';
+
   requestAnimationFrame(() => {
-    overlay.style.opacity = '1';
-    sheet.style.transform = 'translateY(0)';
+    requestAnimationFrame(() => {
+      overlay.style.opacity = '1';
+      sheet.style.transform = 'translateY(0)';
+    });
   });
 }
 
 function closeDetail() {
   const overlay = document.getElementById('detailOverlay');
   const sheet   = document.getElementById('detailSheet');
-  sheet.style.transform  = 'translateY(100%)';
-  overlay.style.opacity  = '0';
+  sheet.style.transform = 'translateY(100%)';
+  overlay.style.opacity = '0';
+  document.body.style.overflow = '';
   setTimeout(() => {
     sheet.style.display   = 'none';
     overlay.style.display = 'none';
