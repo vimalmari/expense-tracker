@@ -1,3 +1,62 @@
+
+/* ============================================================ EXPENSE DETAIL SHEET */
+function openDetail(exp) {
+  const overlay = document.getElementById('detailOverlay');
+  const sheet   = document.getElementById('detailSheet');
+
+  document.getElementById('dsIcon').textContent   = exp.icon || '📝';
+  document.getElementById('dsAmount').textContent = fmt(exp.amount);
+  document.getElementById('dsTime').textContent   = exp.exp_time;
+  document.getElementById('dsDate').textContent   = exp.date;
+
+  // Description row
+  const descRow = document.getElementById('dsDescRow');
+  const descEl  = document.getElementById('dsDesc');
+  if (exp.description) {
+    descEl.textContent = exp.description;
+    descRow.style.display = 'flex';
+  } else {
+    descRow.style.display = 'none';
+  }
+
+  // Category row
+  const catRow = document.getElementById('dsCatRow');
+  const catEl  = document.getElementById('dsCat');
+  const subEl2 = document.getElementById('dsSub');
+  if (exp.grp) {
+    catEl.textContent  = exp.grp;
+    subEl2.textContent = exp.sub || '';
+    catRow.style.display = 'flex';
+  } else {
+    catRow.style.display = 'none';
+    subEl2.textContent = exp.description || '';
+  }
+
+  // Delete button
+  document.getElementById('dsDeleteBtn').onclick = () => {
+    deleteExpense(exp.id);
+    closeDetail();
+  };
+
+  overlay.style.display = 'block';
+  sheet.style.display   = 'block';
+  requestAnimationFrame(() => {
+    overlay.style.opacity = '1';
+    sheet.style.transform = 'translateY(0)';
+  });
+}
+
+function closeDetail() {
+  const overlay = document.getElementById('detailOverlay');
+  const sheet   = document.getElementById('detailSheet');
+  sheet.style.transform  = 'translateY(100%)';
+  overlay.style.opacity  = '0';
+  setTimeout(() => {
+    sheet.style.display   = 'none';
+    overlay.style.display = 'none';
+  }, 300);
+}
+
 /* ============================================================
    EXPENSE TRACKER — SCRIPT.JS
    Email OTP Auth | Tabs | Dark/Light | Tamil/English | PWA
@@ -479,6 +538,7 @@ function renderExpenseList(listId, emptyId, expList){
   expList.forEach(exp=>{
     const li=document.createElement('li'); li.className='expense-item';
     const subLabel = exp.description ? exp.description : (exp.sub || '');
+    li.style.cursor = 'pointer';
     li.innerHTML=`
       <div class="expense-icon">${esc(exp.icon)}</div>
       <div class="expense-info">
@@ -487,8 +547,9 @@ function renderExpenseList(listId, emptyId, expList){
       </div>
       <div class="expense-right">
         <span class="expense-amount">${fmt(exp.amount)}</span>
-        <button class="del-item-btn" onclick="deleteExpense(${exp.id})">✕</button>
+        <button class="del-item-btn" onclick="event.stopPropagation();deleteExpense(${exp.id})">✕</button>
       </div>`;
+    li.addEventListener('click', () => openDetail(exp));
     list.appendChild(li);
   });
 }
